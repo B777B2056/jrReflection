@@ -1,17 +1,19 @@
 #include "test.h"
 
-int main(int argc, char** argv) {
+int main(void) {
     std::string class_name = "Test";
     std::string attr_name = "attr";
-    std::string method_name = "method";
+    std::string method_name = "fun";
     // Register class info
-    auto reg = tiny_reflect::Registrar<Test>::getRegistrar(class_name);
-    reg.registCreator(createTest);
-    reg.registAttribute(attr_name, &Test::attr);
-    reg.registMethod(method_name, &Test::fun);
+    {
+        jrReflection::Registrar reg(class_name);
+        reg.registCreator(&Test::createInstance);
+        reg.registAttribute(attr_name, &Test::attr);
+        reg.registMethod(method_name, &Test::fun);
+    }
     // Create a instance by name
-    auto trc = tiny_reflect::Class<Test>::getClass(class_name);
-    auto test = trc.newInstancePointer(9, 9.68);
+    jrReflection::Class trc(class_name);
+    trc.constructor(6, 5.564);
     // Set and get a attribute's value
     trc.setAttribute(attr_name, 65536);
     std::cout << attr_name << " is " << trc.getAttribute<int>(attr_name) << std::endl;
