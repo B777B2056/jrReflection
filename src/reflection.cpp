@@ -2,17 +2,27 @@
 
 namespace jrReflection {
     static std::map<std::string, ClassInfo> objects;
+    static std::map<std::string, MethodInfo> methods;
 
-    void Registrar::registFinish() {
-        jrReflection::objects.emplace(ci.class_name, ci);
+    Registrar::~Registrar() {
+        if(!ci.class_name.empty()) {
+            Registrar::getObjects().emplace(ci.class_name, ci);
+        }
     }
 
-    void Registrar::unregist(const std::string& class_name) {
-        jrReflection::objects.erase(class_name);
+    std::map<std::string, ClassInfo>& Registrar::getObjects() {
+        return objects;
     }
 
+    std::map<std::string, MethodInfo>& Registrar::getMethods() {
+        return methods;
+    }
 
-    std::map<std::string, ClassInfo>& Class::getMap() {
+    std::map<std::string, MethodInfo>& Method::getMethods() {
+        return methods;
+    }
+
+    std::map<std::string, ClassInfo>& Object::getObjects() {
         return objects;
     }
 }

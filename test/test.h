@@ -4,7 +4,9 @@
 #include "../src/reflection.hpp"
 #include <iostream>
 
-class Test : public jrReflection::Reflectable {
+std::string test_fun(int n);
+
+class Test : jrReflection::Reflectable {
 public:
     int attr;
 
