@@ -7,6 +7,23 @@
 #include <functional>
 
 namespace jrReflection {
+    class Variable {
+    private:
+        std::any var;
+
+    public:
+        Variable() = default;
+
+        template<typename T>
+        Variable(T t) : var(std::make_any<T>(t)) {}
+
+        template<typename T>
+        void toVar(T t) { var = std::make_any<T>(t); }
+
+        template<typename T>
+        T toType() { return std::any_cast<T>(var); }
+    };
+
     /* ============================ Method(Non-member function) reflection information structure ============================ */
     struct MethodInfo {
         std::string method_name;
@@ -16,10 +33,12 @@ namespace jrReflection {
 
         template<typename R, typename... Args>
         MethodInfo(const std::string& name, R(*method)(Args...)) : method_name(name) {
-            std::function<R(Args...)> method_wrapper = [method](Args&&... args)->R {
-                                                            return (*method)(std::forward<Args>(args)...);
-                                                       };
-            this->method = std::make_any<std::function<R(Args...)>>(method_wrapper);
+            std::function<Variable(Args...)> method_wrapper = [method](Args&&... args) {
+                                                                  Variable var;
+                                                                  var.toVar((*method)(std::forward<Args>(args)...));
+                                                                  return var;
+                                                              };
+            this->method = std::make_any<std::function<Variable(Args...)>>(method_wrapper);
         }
     };
 
@@ -30,27 +49,40 @@ namespace jrReflection {
 
     struct AttrInfo {
         std::string attr_name;
-        long attr_offset;
+        std::any set_attr;
+        std::any get_attr;
 
-        AttrInfo() : attr_name(""), attr_offset(-1) {}
+        AttrInfo() = default;
 
         template<typename T, typename Attr>
-        AttrInfo(const std::string& name, Attr T::*attr) : attr_name(name), attr_offset(reinterpret_cast<long>(*(void**)(&attr))) {}
+        AttrInfo(const std::string& name, Attr T::*attr) : attr_name(name) {
+            std::function<void(Reflectable*, Variable)> set_attr_wrapper = [attr](Reflectable* a, Variable var) {
+                                                                                T* b = reinterpret_cast<T*>(a);
+                                                                                b->*attr = var.toType<Attr>();
+                                                                                return ;
+                                                                            };
+            set_attr = std::make_any<std::function<void(Reflectable*, Variable)>>(set_attr_wrapper);
+            std::function<Variable(Reflectable*)> get_attr_wrapper = [attr](Reflectable* a) {
+                                                                        T* b = reinterpret_cast<T*>(a);
+                                                                        return Variable(b->*attr);
+                                                                     };
+            get_attr = std::make_any<std::function<Variable(Reflectable*)>>(get_attr_wrapper);
+        }
     };
 
     struct MemfunInfo {
         std::string memfun_name;
         std::any memfun;
 
-        MemfunInfo() : memfun_name("") {}
+        MemfunInfo() = default;
 
         template<typename T, typename R, typename... Args>
         MemfunInfo(const std::string& name, R(T::*method)(Args...)) : memfun_name(name) {
-            std::function<R(Reflectable*, Args...)> method_wrapper = [method](Reflectable* a, Args&&... memArgs)->R {
+            std::function<Variable(Reflectable*, Args...)> method_wrapper = [method](Reflectable* a, Args&&... memArgs) {
                                                                             T* b = dynamic_cast<T*>(a);
-                                                                            return (b->*method)(std::forward<Args>(memArgs)...);
+                                                                            return Variable((b->*method)(std::forward<Args>(memArgs)...));
                                                                       };
-            this->memfun = std::make_any<std::function<R(Reflectable*, Args...)>>(method_wrapper);
+            this->memfun = std::make_any<std::function<Variable(Reflectable*, Args...)>>(method_wrapper);
         }
     };
 

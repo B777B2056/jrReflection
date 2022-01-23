@@ -10,7 +10,8 @@ int main(void) {
     }
     // Invoke nonmember method
     jrReflection::Method method(method_name);
-    std::cout << method.invokeMethod<std::string>(98) << std::endl;
+    jrReflection::Variable ret = method.invokeMethod(98);
+    std::cout << ret.toType<std::string>() << std::endl;
     /* Class test */
     std::string class_name = "Test";
     std::string attr_name = "attr";
@@ -26,9 +27,13 @@ int main(void) {
     jrReflection::Object object(class_name);
     object.constructor(6, 5.564);
     // Set and get a attribute's value
-    object.setAttribute(attr_name, 65536);
-    std::cout << attr_name << " is " << object.getAttribute<int>(attr_name) << std::endl;
+    int new_var = 65536;
+    jrReflection::Variable attr;
+    attr.toVar(new_var);
+    object.setAttribute(attr_name, attr);
+    std::cout << attr_name << " is " << object.getAttribute(attr_name).toType<int>() << std::endl;
     // Invoke a member function
-    std::cout << "invoke ret is " << object.invokeMemberFunc<int>(memfun_name, 'b') << std::endl;
+    jrReflection::Variable mem_ret = object.invokeMemberFunc(memfun_name, 'b');
+    std::cout << "invoke ret is " << mem_ret.toType<int>() << std::endl;
     return 0;
 }

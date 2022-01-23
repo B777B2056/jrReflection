@@ -40,8 +40,8 @@ namespace jrReflection {
     public:
         Method(const std::string& name) : method_name(name) {}
         // Invoke a nonmember function
-        template<typename R, typename... Args>
-        R invokeMethod(Args&&... args);
+        template<typename... Args>
+        auto invokeMethod(Args&&... args);
     };
 
     class Object {
@@ -54,18 +54,17 @@ namespace jrReflection {
 
     public:
         Object(const std::string& name) : class_name(name), instance(nullptr) {}
+        ~Object() { delete instance; }
         // Create a object
         template<typename... Args>
         void constructor(Args&&... args);
         // Set a target instance's data member
-        template<typename Attr>
-        void setAttribute(const std::string& attr_name, const Attr& new_var);
+        void setAttribute(const std::string& attr_name, Variable new_var);
         // Get a target instance's data member
-        template<typename Attr>
-        Attr getAttribute(const std::string& attr_name) const;
+        Variable getAttribute(const std::string& attr_name) const;
         // Invoke a member function
-        template<typename R, typename... Args>
-        R invokeMemberFunc(const std::string& method_name, Args&&... args);
+        template<typename... Args>
+        auto invokeMemberFunc(const std::string& method_name, Args&&... args);
     };
 
     /* Implementation */
@@ -89,9 +88,9 @@ namespace jrReflection {
         Registrar::getMethods().emplace(method_name, MethodInfo(method_name, method));
     }
 
-    template<typename R, typename... Args>
-    R Method::invokeMethod(Args&&... args) {
-        auto fun = std::any_cast<std::function<R(Args...)>>(Method::getMethods()[method_name].method);
+    template<typename... Args>
+    auto Method::invokeMethod(Args&&... args) {
+        auto fun = std::any_cast<std::function<Variable(Args...)>>(Method::getMethods()[method_name].method);
         return fun(std::forward<Args>(args)...);
     }
 
@@ -106,23 +105,23 @@ namespace jrReflection {
         }
     }
 
-    template<typename Attr>
-    void Object::setAttribute(const std::string& attr_name, const Attr& new_var) {
-        long offset = (Object::getObjects()[class_name].attributes)[attr_name].attr_offset;
-        Attr* pvar = reinterpret_cast<Attr*>(instance + offset);
-        *pvar = new_var;
-    }
+//    template<typename Attr>
+//    void Object::setAttribute(const std::string& attr_name, const Attr& new_var) {
+//        long offset = (Object::getObjects()[class_name].attributes)[attr_name].attr_offset;
+//        Attr* pvar = reinterpret_cast<Attr*>(instance + offset);
+//        *pvar = new_var;
+//    }
 
-    template<typename Attr>
-    Attr Object::getAttribute(const std::string& attr_name) const {
-        long offset = (Object::getObjects()[class_name].attributes)[attr_name].attr_offset;
-        Attr* pvar = reinterpret_cast<Attr*>(instance + offset);
-        return *pvar;
-    }
+//    template<typename Attr>
+//    Attr Object::getAttribute(const std::string& attr_name) const {
+//        long offset = (Object::getObjects()[class_name].attributes)[attr_name].attr_offset;
+//        Attr* pvar = reinterpret_cast<Attr*>(instance + offset);
+//        return *pvar;
+//    }
 
-    template<typename R, typename... Args>
-    R Object::invokeMemberFunc(const std::string& method_name, Args&&... args) {
-        auto memfun = std::any_cast<std::function<R(Reflectable*, Args...)>>((Object::getObjects()[class_name].methods)[method_name].memfun);
+    template<typename... Args>
+    auto Object::invokeMemberFunc(const std::string& method_name, Args&&... args) {
+        auto memfun = std::any_cast<std::function<Variable(Reflectable*, Args...)>>((Object::getObjects()[class_name].methods)[method_name].memfun);
         return memfun(instance, std::forward<Args>(args)...);
     }
 }
