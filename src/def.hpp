@@ -5,6 +5,7 @@
 #include <map>
 #include <string>
 #include <functional>
+#include <type_traits>
 
 namespace jrReflection {
     class Variable {
@@ -34,9 +35,7 @@ namespace jrReflection {
         template<typename R, typename... Args>
         MethodInfo(const std::string& name, R(*method)(Args...)) : method_name(name) {
             std::function<Variable(Args...)> method_wrapper = [method](Args&&... args) {
-                                                                  Variable var;
-                                                                  var.toVar((*method)(std::forward<Args>(args)...));
-                                                                  return var;
+                                                                  return Variable((*method)(std::forward<Args>(args)...));
                                                               };
             this->method = std::make_any<std::function<Variable(Args...)>>(method_wrapper);
         }
@@ -57,14 +56,16 @@ namespace jrReflection {
         template<typename T, typename Attr>
         AttrInfo(const std::string& name, Attr T::*attr) : attr_name(name) {
             std::function<void(Reflectable*, Variable)> set_attr_wrapper = [attr](Reflectable* a, Variable var) {
-                                                                                T* b = reinterpret_cast<T*>(a);
-                                                                                b->*attr = var.toType<Attr>();
+                                                                                static_assert(std::is_base_of<Reflectable, T>::value,
+                                                                                              "Reflectable is not base of ChildClass");
+                                                                                static_cast<T*>(a)->*attr = var.toType<Attr>();
                                                                                 return ;
                                                                             };
             set_attr = std::make_any<std::function<void(Reflectable*, Variable)>>(set_attr_wrapper);
             std::function<Variable(Reflectable*)> get_attr_wrapper = [attr](Reflectable* a) {
-                                                                        T* b = reinterpret_cast<T*>(a);
-                                                                        return Variable(b->*attr);
+                                                                        static_assert(std::is_base_of<Reflectable, T>::value,
+                                                                                      "Reflectable is not base of ChildClass");
+                                                                        return Variable(static_cast<T*>(a)->*attr);
                                                                      };
             get_attr = std::make_any<std::function<Variable(Reflectable*)>>(get_attr_wrapper);
         }
@@ -79,8 +80,9 @@ namespace jrReflection {
         template<typename T, typename R, typename... Args>
         MemfunInfo(const std::string& name, R(T::*method)(Args...)) : memfun_name(name) {
             std::function<Variable(Reflectable*, Args...)> method_wrapper = [method](Reflectable* a, Args&&... memArgs) {
-                                                                            T* b = dynamic_cast<T*>(a);
-                                                                            return Variable((b->*method)(std::forward<Args>(memArgs)...));
+                                                                            static_assert(std::is_base_of<Reflectable, T>::value,
+                                                                                          "Reflectable is not base of ChildClass");
+                                                                            return Variable((static_cast<T*>(a)->*method)(std::forward<Args>(memArgs)...));
                                                                       };
             this->memfun = std::make_any<std::function<Variable(Reflectable*, Args...)>>(method_wrapper);
         }
@@ -91,6 +93,18 @@ namespace jrReflection {
         std::any creator;
         std::map<std::string, AttrInfo> attributes;
         std::map<std::string, MemfunInfo> methods;
+
+        ClassInfo() : class_name("") {}
+
+        template<typename T, typename... Args>
+        void set_ctor() {
+            std::function<Reflectable*(Args...)> ctor_wrapper = [](Args&&... ctorArgs)->Reflectable* {
+                                                                    static_assert(std::is_base_of<Reflectable, T>::value,
+                                                                                  "Reflectable is not base of ChildClass");
+                                                                    return static_cast<Reflectable*>(new T(std::forward<Args>(ctorArgs)...));
+                                                                };
+            this->creator = std::make_any<std::function<Reflectable*(Args...)>>(ctor_wrapper);
+        }
     };
 }
 

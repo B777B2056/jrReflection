@@ -19,7 +19,7 @@ int main(void) {
     // Register class info
     {
         jrReflection::Registrar reg(class_name);
-        reg.registCreator(&Test::createInstance);
+        reg.registCreator<Test, int, double>();
         reg.registAttribute(attr_name, &Test::attr);
         reg.registMemfun(memfun_name, &Test::fun);
     }

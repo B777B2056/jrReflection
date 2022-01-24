@@ -17,8 +17,8 @@ namespace jrReflection {
         Registrar(const std::string name = "") { ci.class_name = name; }
         ~Registrar();
         // Register the creator
-        template<typename... Args>
-        void registCreator(Reflectable*(*creator)(Args...));
+        template<typename T, typename... Args>
+        void registCreator();
         // Register the attributes
         template<typename T, typename Attr>
         void registAttribute(const std::string& attr_name, Attr T::*attr);
@@ -68,9 +68,9 @@ namespace jrReflection {
     };
 
     /* Implementation */
-    template<typename... Args>
-    void Registrar::registCreator(Reflectable*(*creator)(Args...)) {
-        ci.creator = std::make_any<Reflectable*(*)(Args...)>(creator);
+    template<typename T, typename... Args>
+    void Registrar::registCreator() {
+        ci.set_ctor<T, Args...>();
     }
 
     template<typename T, typename Attr>
@@ -96,10 +96,9 @@ namespace jrReflection {
 
     template<typename... Args>
     void Object::constructor(Args&&... args) {
-        typedef Reflectable* (*Ctor)(Args...);
         try {
-            Ctor ctor = std::any_cast<Ctor>(Object::getObjects()[class_name].creator);
-            instance = (*ctor)(std::forward<Args>(args)...);
+            auto ctor = std::any_cast<std::function<Reflectable*(Args...)>>(Object::getObjects()[class_name].creator);
+            instance = ctor(std::forward<Args>(args)...);
         } catch (const std::bad_any_cast&) {
             throw std::runtime_error("Constructor is empty!");
         }

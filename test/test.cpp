@@ -11,7 +11,3 @@ Test::Test(int x, double y) {
 int Test::fun(char ch) {
     return ch;
 }
-
-jrReflection::Reflectable* Test::createInstance(int x, double y) {
-    return new Test(x, y);
-}
