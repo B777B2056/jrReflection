@@ -13,6 +13,7 @@ public:
 public:
     Test(int x, double y);
     int fun(char ch);
+    ~Test() { std::cout << "Test dtor." << std::endl; }
 
     static jrReflection::Reflectable* createInstance(int x, double y);
 };

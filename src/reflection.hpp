@@ -105,20 +105,6 @@ namespace jrReflection {
         }
     }
 
-//    template<typename Attr>
-//    void Object::setAttribute(const std::string& attr_name, const Attr& new_var) {
-//        long offset = (Object::getObjects()[class_name].attributes)[attr_name].attr_offset;
-//        Attr* pvar = reinterpret_cast<Attr*>(instance + offset);
-//        *pvar = new_var;
-//    }
-
-//    template<typename Attr>
-//    Attr Object::getAttribute(const std::string& attr_name) const {
-//        long offset = (Object::getObjects()[class_name].attributes)[attr_name].attr_offset;
-//        Attr* pvar = reinterpret_cast<Attr*>(instance + offset);
-//        return *pvar;
-//    }
-
     template<typename... Args>
     auto Object::invokeMemberFunc(const std::string& method_name, Args&&... args) {
         auto memfun = std::any_cast<std::function<Variable(Reflectable*, Args...)>>((Object::getObjects()[class_name].methods)[method_name].memfun);
