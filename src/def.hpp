@@ -23,6 +23,9 @@ namespace jrReflection {
 
         template<typename T>
         T toType() { return std::any_cast<T>(var); }
+
+        template<typename T>
+        operator T() { return std::any_cast<T>(var); }
     };
 
     /* ============================ Method(Non-member function) reflection information structure ============================ */
