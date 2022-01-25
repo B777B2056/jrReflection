@@ -2,7 +2,6 @@
 #define REFLECTION_H
 
 #include "def.hpp"
-#include <stdexcept>
 
 namespace jrReflection {
     class Registrar {

@@ -14,11 +14,8 @@
 ```c++
 lambda
 {
-// 断言，防止待反射的类型未public继承Reflectable类
-static_assert(std::is_base_of<Reflectable, T>::value, 
-              "Reflectable is not base of ChildClass"); 
 // a为Reflectable*
-T* b = static_cast<T*>(a); 
+T* b = dynamic_cast<T*>(a); 
 }
 ```  
 这样的话，类类型信息将保存在lambda中，反射时将无需任何类类型信息。
@@ -26,7 +23,6 @@ T* b = static_cast<T*>(a);
 核心思想与类成员变量一致
 ## 2 基本数据结构与反射实现
 本处所介绍的基本数据结构都定义在src/def.hpp内。   
-注：考虑到dynamic_cast的性能问题，实现采用std::is_base_of和static_cast配合来进行向上或向下转型。
 ### 2.1 Variable
 Variable是std::any的简单封装，主要用于抹除函数返回值类型。
 ```c++
@@ -94,10 +90,14 @@ struct AttrInfo {
 std::function<void(Reflectable*, Variable)> 
 set_attr_wrapper = [attr](Reflectable* a, Variable var) 
 {
-    static_assert(std::is_base_of<Reflectable, T>::value, 
-                  "Reflectable is not base of ChildClass");
     // lambda内部保存了传入的类类型信息
-    static_cast<T*>(a)->*attr = var.toType<Attr>();   
+    T* b = dynamic_cast<T*>(a);
+    // 向下转型失败，传入的对象指针并未继承自Reflectable
+    if(!b) {
+        throw std::runtime_error("Reflectable is not base of ChildClass");
+    }
+    // 取用向下转型后的对象所持有的成员
+    b->*attr = var.toType<Attr>();   
 };
 // std::make_any
 ```
@@ -106,10 +106,14 @@ set_attr_wrapper = [attr](Reflectable* a, Variable var)
 std::function<Variable(Reflectable*)> 
 get_attr_wrapper = [attr](Reflectable* a) 
 {
-    static_assert(std::is_base_of<Reflectable, T>::value,
-                  "Reflectable is not base of ChildClass");
     // lambda内部保存了传入的类类型信息
-    return Variable(static_cast<T*>(a)->*attr);
+    T* b = dynamic_cast<T*>(a);
+    // 向下转型失败，传入的对象指针并未继承自Reflectable
+    if(!b) {
+        throw std::runtime_error("Reflectable is not base of ChildClass");
+    }
+    // 取用向下转型后的对象所持有的成员
+    return Variable(b->*attr);
 };
 // std::make_any
 ```
@@ -129,9 +133,14 @@ struct MemfunInfo {
 std::function<Variable(Reflectable*, Args...)> 
 method_wrapper = [method](Reflectable* a, Args&&... memArgs)
 {   
-    static_assert(std::is_base_of<Reflectable, T>::value,
-                  "Reflectable is not base of ChildClass");
-    return Variable((static_cast<T*>(a)->*method)(std::forward<Args>(memArgs)...));
+    // lambda内部保存了传入的类类型信息
+    T* b = dynamic_cast<T*>(a);
+    // 向下转型失败，传入的对象指针并未继承自Reflectable
+    if(!b) {
+        throw std::runtime_error("Reflectable is not base of ChildClass");
+    }
+    // 调用向下转型后的对象所持有的成员函数
+    return Variable((b->*method)(std::forward<Args>(memArgs)...));
 };
 ```
 ### 2.3.3 ClassInfo
@@ -151,9 +160,14 @@ struct ClassInfo {
 std::function<Reflectable*(Args...)> 
 ctor_wrapper = [](Args&&... ctorArgs)->Reflectable* 
 {
-    static_assert(std::is_base_of<Reflectable, T>::value,
-                  "Reflectable is not base of ChildClass");
-    return static_cast<Reflectable*>(new T(std::forward<Args>(ctorArgs)...));
+    // lambda内部保存了传入的类类型信息
+    Reflectable* b = dynamic_cast<Reflectable*>(new T(std::forward<Args>(ctorArgs)...));
+    // 向上转型失败，传入的对象指针并未继承自Reflectable
+    if(!b) {
+        throw std::runtime_error("Reflectable is not base of ChildClass");
+    }
+    // 取用向下转型后的对象所持有的成员
+    return b;
 };
 ```
 ### 2.3.4 string-ClassInfo键值对
