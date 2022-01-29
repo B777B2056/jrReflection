@@ -11,3 +11,7 @@ Test::Test(int x, double y) {
 int Test::fun(char ch) {
     return ch;
 }
+
+std::string Test::fun2(int n) {
+    return test_fun(n);
+}

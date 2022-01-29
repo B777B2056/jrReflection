@@ -4,10 +4,15 @@
 #include <any>
 #include <map>
 #include <string>
+#include <memory>
 #include <stdexcept>
 #include <functional>
 
 namespace jrReflection {
+    struct Reflectable {
+        virtual ~Reflectable() = default;
+    };
+
     class Variable {
     private:
         std::any var;
@@ -28,27 +33,7 @@ namespace jrReflection {
         operator T() { return std::any_cast<T>(var); }
     };
 
-    /* ============================ Method(Non-member function) reflection information structure ============================ */
-    struct MethodInfo {
-        std::string method_name;
-        std::any method;
-
-        MethodInfo() : method_name("") {}
-
-        template<typename R, typename... Args>
-        MethodInfo(const std::string& name, R(*method)(Args...)) : method_name(name) {
-            std::function<Variable(Args...)> method_wrapper = [method](Args&&... args) {
-                return Variable((*method)(std::forward<Args>(args)...));
-            };
-            this->method = std::make_any<std::function<Variable(Args...)>>(method_wrapper);
-        }
-    };
-
-    /* ============================ Class reflection information structure ============================ */
-    struct Reflectable {
-        virtual ~Reflectable() = default;
-    };
-
+    /* ============================ Reflection information structure ============================ */
     struct AttrInfo {
         std::string attr_name;
         std::any set_attr;
@@ -58,42 +43,52 @@ namespace jrReflection {
 
         template<typename T, typename Attr>
         AttrInfo(const std::string& name, Attr T::*attr) : attr_name(name) {
-            std::function<void(Reflectable*, Variable)> set_attr_wrapper = [attr](Reflectable* a, Variable var) {
-                T* b = dynamic_cast<T*>(a);
+            std::function<void(std::shared_ptr<Reflectable>, Variable)> set_attr_wrapper = [attr](std::shared_ptr<Reflectable> a, Variable var) {
+                std::shared_ptr<T> b = std::dynamic_pointer_cast<T>(a);
                 if(!b) {
                     throw std::runtime_error("Reflectable is not base of ChildClass");
                 }
-                b->*attr = var.toType<Attr>();
+                b.get()->*attr = var.toType<Attr>();
                 return ;
             };
-            set_attr = std::make_any<std::function<void(Reflectable*, Variable)>>(set_attr_wrapper);
-            std::function<Variable(Reflectable*)> get_attr_wrapper = [attr](Reflectable* a) {
-                T* b = dynamic_cast<T*>(a);
+            set_attr = std::make_any<std::function<void(std::shared_ptr<Reflectable>, Variable)>>(set_attr_wrapper);
+            std::function<Variable(std::shared_ptr<Reflectable>)> get_attr_wrapper = [attr](std::shared_ptr<Reflectable> a) {
+                std::shared_ptr<T> b = std::dynamic_pointer_cast<T>(a);
                 if(!b) {
                     throw std::runtime_error("Reflectable is not base of ChildClass");
                 }
-                return Variable(b->*attr);
+                return Variable(b.get()->*attr);
              };
-            get_attr = std::make_any<std::function<Variable(Reflectable*)>>(get_attr_wrapper);
+            get_attr = std::make_any<std::function<Variable(std::shared_ptr<Reflectable>)>>(get_attr_wrapper);
         }
     };
 
-    struct MemfunInfo {
-        std::string memfun_name;
-        std::any memfun;
+    struct MethodInfo {
+        std::string method_name;
+        std::any method;
 
-        MemfunInfo() = default;
+        MethodInfo() : method_name("") {}
 
+        /* Method(Non-member function) reflection information structure init */
+        template<typename R, typename... Args>
+        MethodInfo(const std::string& name, R(*method)(Args...)) : method_name(name) {
+            std::function<Variable(Args...)> method_wrapper = [method](Args&&... args) {
+                return Variable((*method)(std::forward<Args>(args)...));
+            };
+            this->method = std::make_any<std::function<Variable(Args...)>>(method_wrapper);
+        }
+
+        /* Method(Member function) reflection information structure init */
         template<typename T, typename R, typename... Args>
-        MemfunInfo(const std::string& name, R(T::*method)(Args...)) : memfun_name(name) {
-            std::function<Variable(Reflectable*, Args...)> method_wrapper = [method](Reflectable* a, Args&&... memArgs) {
-                T* b = dynamic_cast<T*>(a);
+        MethodInfo(const std::string& name, R(T::*method)(Args...)) : method_name(name) {
+            std::function<Variable(std::shared_ptr<Reflectable>, Args...)> method_wrapper = [method](std::shared_ptr<Reflectable> a, Args&&... memArgs) {
+                std::shared_ptr<T> b = std::dynamic_pointer_cast<T>(a);
                 if(!b) {
                     throw std::runtime_error("Reflectable is not base of ChildClass");
                 }
-                return Variable((b->*method)(std::forward<Args>(memArgs)...));
+                return Variable((b.get()->*method)(std::forward<Args>(memArgs)...));
             };
-            this->memfun = std::make_any<std::function<Variable(Reflectable*, Args...)>>(method_wrapper);
+            this->method = std::make_any<std::function<Variable(std::shared_ptr<Reflectable>, Args...)>>(method_wrapper);
         }
     };
 
@@ -101,20 +96,20 @@ namespace jrReflection {
         std::string class_name;
         std::any creator;
         std::map<std::string, AttrInfo> attributes;
-        std::map<std::string, MemfunInfo> methods;
+        std::map<std::string, MethodInfo> methods;
 
         ClassInfo() : class_name("") {}
 
         template<typename T, typename... Args>
         void set_ctor() {
-            std::function<Reflectable*(Args...)> ctor_wrapper = [](Args&&... ctorArgs)->Reflectable* {
-                Reflectable* b = dynamic_cast<Reflectable*>(new T(std::forward<Args>(ctorArgs)...));
+            std::function<std::shared_ptr<Reflectable>(Args...)> ctor_wrapper = [](Args&&... ctorArgs) {
+                std::shared_ptr<Reflectable> b = std::dynamic_pointer_cast<Reflectable>(std::make_shared<T>(std::forward<Args>(ctorArgs)...));
                 if(!b) {
                     throw std::runtime_error("Reflectable is not base of ChildClass");
                 }
                 return b;
             };
-            this->creator = std::make_any<std::function<Reflectable*(Args...)>>(ctor_wrapper);
+            this->creator = std::make_any<std::function<std::shared_ptr<Reflectable>(Args...)>>(ctor_wrapper);
         }
     };
 }

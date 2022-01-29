@@ -6,13 +6,15 @@
 
 std::string test_fun(int n);
 
-class Test : public jrReflection::Reflectable {
-public:
+struct Test : public jrReflection::Reflectable {
     int attr;
+    std::string attr2;
+    std::string attr3;
+    std::string attr4;
 
-public:
     Test(int x, double y);
     int fun(char ch);
+    std::string fun2(int n);
     ~Test() { std::cout << "Test dtor." << std::endl; }
 };
 

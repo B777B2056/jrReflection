@@ -1,7 +1,7 @@
 # jrReflection ![](https://img.shields.io/badge/C%2B%2B-17-brightgreen)
 实现了对非成员函数、类、类成员变量和类成员函数的反射：上述内容经手动注册后，用户无需使用任何宏即可由名称（字符串）创建并使用。
 ## 0 基本使用
-需反射的类必须public继承Reflectable类，其他内容参见test/main.cpp。
+需反射的类必须public继承Reflectable类，具体请参见test/main.cpp。
 ## 1 主要思路
 ### 1.1 非成员函数
 将非成员函数的函数指针传入MethodInfo类，其内部使用一个lambda匿名函数包装该函数指针：形式参数不变，但返回值包裹为Variable（Variable为std::any的简单封装，意在抹除类型），以实现通过字符串调用该函数时不依赖于其返回值类型。
@@ -14,7 +14,7 @@
 ```c++
 lambda
 {
-// a为Reflectable*
+// a为Reflectable*（实际代码使用智能指针）
 T* b = dynamic_cast<T*>(a); 
 }
 ```  
@@ -36,6 +36,8 @@ public:
     template<typename T> void toVar(T t);
     /* 将内部存储的std::any还原为类型T的值 */
     template<typename T> T toType();
+    /* 隐式转换 */
+    template<typename T> operator T();
 };
 
 ```
@@ -46,18 +48,21 @@ MethodInfo是非成员函数被调用所需要的信息，其内部存储函数�
 struct MethodInfo {
     std::string method_name;
     std::any method;
-    /* 将函数指针转换为抹除类型的函数对象 */
+    /* 将非成员函数指针转换为抹除类型的函数对象 */
     template<typename R, typename... Args>
     MethodInfo(const std::string& name, R(*method)(Args...));
+    /* 将成员函数指针转换为抹除类型的函数对象 */
+    template<typename T, typename R, typename... Args>
+    MethodInfo(const std::string& name, R(T::*method)(Args...));
 };
 ```
-转换过程分为两步：  
+非成员函数指针转换过程分为两步：  
 1. 抹除函数返回值类型   
 在lambda内部调用原本的函数指针，再将返回值转换为Variable。
 ```c++
 std::function<Variable(Args...)> 
-method_wrapper = [method](Args&&... args)
-{   Variable var;
+method_wrapper = [method](Args&&... args) {   
+    Variable var;
     var.toVar((*method)(std::forward<Args>(args)...));
     return var;
 }
@@ -67,6 +72,7 @@ method_wrapper = [method](Args&&... args)
 ```c++
 this->method = std::make_any<std::function<Variable(Args...)>>(method_wrapper);
 ```
+成员函数指针转换过程在2.3.2介绍。
 ### 2.2.2 string-MethodInfo键值对
 该键值对定义在reflection.cpp内，对用户透明；用于通过函数名称迅速查找对应的MethodInfo对象。  
 ```c++
@@ -87,60 +93,49 @@ struct AttrInfo {
 ```
 1. 转换为setter  
 ```c++
-std::function<void(Reflectable*, Variable)> 
-set_attr_wrapper = [attr](Reflectable* a, Variable var) 
-{
+std::function<void(std::shared_ptr<Reflectable>, Variable)> 
+set_attr_wrapper = [attr](std::shared_ptr<Reflectable> a, Variable var) {
     // lambda内部保存了传入的类类型信息
-    T* b = dynamic_cast<T*>(a);
+    std::shared_ptr<T> b = std::dynamic_pointer_cast<T>(a);
     // 向下转型失败，传入的对象指针并未继承自Reflectable
     if(!b) {
         throw std::runtime_error("Reflectable is not base of ChildClass");
     }
     // 取用向下转型后的对象所持有的成员
-    b->*attr = var.toType<Attr>();   
+    b.get()->*attr = var.toType<Attr>();
+    return ;
 };
 // std::make_any
 ```
 2. 转换为getter  
 ```c++
-std::function<Variable(Reflectable*)> 
-get_attr_wrapper = [attr](Reflectable* a) 
-{
+std::function<Variable(std::shared_ptr<Reflectable>)> 
+get_attr_wrapper = [attr](std::shared_ptr<Reflectable> a) {
     // lambda内部保存了传入的类类型信息
-    T* b = dynamic_cast<T*>(a);
+    std::shared_ptr<T> b = std::dynamic_pointer_cast<T>(a);
     // 向下转型失败，传入的对象指针并未继承自Reflectable
     if(!b) {
         throw std::runtime_error("Reflectable is not base of ChildClass");
     }
     // 取用向下转型后的对象所持有的成员
-    return Variable(b->*attr);
+    return Variable(b.get()->*attr);
 };
 // std::make_any
 ```
-### 2.3.2 MemfunInfo
-MemfunInfo是调用类成员函数所需的信息，其内部存储函数名称和被抹去类型的函数对象。  
-```c++
-struct MemfunInfo {
-    std::string memfun_name;
-    std::any memfun;
-    /* 将类成员函数指针转换为抹除类型的函数对象  */
-    template<typename T, typename R, typename... Args>
-    MemfunInfo(const std::string& name, R(T::*method)(Args...));
-};
-```
+### 2.3.2 MethodInfo
+MethodInfo在2.2.1已介绍过，以下主要介绍类成员函数指针转换的过程。
 与类成员变量相似，转换的核心在于让lambda自己保存类类型信息：  
 ```c++
-std::function<Variable(Reflectable*, Args...)> 
-method_wrapper = [method](Reflectable* a, Args&&... memArgs)
-{   
+std::function<Variable(std::shared_ptr<Reflectable>, Args...)> 
+method_wrapper = [method](std::shared_ptr<Reflectable> a, Args&&... memArgs) {
     // lambda内部保存了传入的类类型信息
-    T* b = dynamic_cast<T*>(a);
+    std::shared_ptr<T> b = std::dynamic_pointer_cast<T>(a);
     // 向下转型失败，传入的对象指针并未继承自Reflectable
     if(!b) {
         throw std::runtime_error("Reflectable is not base of ChildClass");
     }
     // 调用向下转型后的对象所持有的成员函数
-    return Variable((b->*method)(std::forward<Args>(memArgs)...));
+    return Variable((b.get()->*method)(std::forward<Args>(memArgs)...));
 };
 ```
 ### 2.3.3 ClassInfo
@@ -150,18 +145,17 @@ struct ClassInfo {
     std::string class_name;
     std::any creator;   // 抹除类型的类构造器
     std::map<std::string, AttrInfo> attributes; // 类成员变量集合
-    std::map<std::string, MemfunInfo> methods;  // 类成员函数集合
+    std::map<std::string, MethodInfo> methods;  // 类成员函数集合
 
     template<typename T, typename... Args> void set_ctor(); // 设置类构造器
 };
 ```   
 通过lambda保存类类型信息来构造类的类型擦除构造器。
 ```c++
-std::function<Reflectable*(Args...)> 
-ctor_wrapper = [](Args&&... ctorArgs)->Reflectable* 
-{
+std::function<std::shared_ptr<Reflectable>(Args...)> 
+ctor_wrapper = [](Args&&... ctorArgs) {
     // lambda内部保存了传入的类类型信息
-    Reflectable* b = dynamic_cast<Reflectable*>(new T(std::forward<Args>(ctorArgs)...));
+    std::shared_ptr<Reflectable> b = std::dynamic_pointer_cast<Reflectable>(std::make_shared<T>(std::forward<Args>(ctorArgs)...));
     // 向上转型失败，传入的对象指针并未继承自Reflectable
     if(!b) {
         throw std::runtime_error("Reflectable is not base of ChildClass");
@@ -182,4 +176,4 @@ static std::map<std::string, ClassInfo> objects;
 ![](pic/r_02.png)
 ## 4 测试
 运行test/main.cpp后：  
-![](pic/test.jpg)
+![](pic/test.png)

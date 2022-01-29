@@ -2,6 +2,7 @@
 #define REFLECTION_H
 
 #include "def.hpp"
+#include <vector>
 
 namespace jrReflection {
     class Registrar {
@@ -23,47 +24,74 @@ namespace jrReflection {
         void registAttribute(const std::string& attr_name, Attr T::*attr);
         // Register the member function
         template<typename T, typename R, typename... Args>
-        void registMemfun(const std::string& method_name, R(T::*method)(Args...));
+        void registMethod(const std::string& method_name, R(T::*method)(Args...));
         // Register the non-member function
         template<typename R, typename... Args>
         void registMethod(const std::string& method_name, R(*method)(Args...));
     };
 
-    class Method {
-    private:
-        std::string method_name;
-
-    private:
-        static std::map<std::string, MethodInfo>& getMethods();
-
-    public:
-        Method(const std::string& name) : method_name(name) {}
-        // Invoke a nonmember function
-        template<typename... Args>
-        auto invokeMethod(Args&&... args);
-    };
+    class Attribute;
+    class Method;
 
     class Object {
+        friend class Attribute;
+        friend class Method;
+
     private:
-        std::string class_name;
-        Reflectable* instance;   // pointer to instance
+        ClassInfo& ci;
+        std::shared_ptr<Reflectable> instance;  // pointer to instance
 
     private:
         static std::map<std::string, ClassInfo>& getObjects();
 
     public:
-        Object(const std::string& name) : class_name(name), instance(nullptr) {}
-        ~Object() { delete instance; }
+        Object(const std::string& name) : ci(Object::getObjects()[name]), instance(nullptr) {}
         // Create a object
         template<typename... Args>
-        void constructor(Args&&... args);
-        // Set a target instance's data member
-        void setAttribute(const std::string& attr_name, Variable new_var);
+        void construct(Args&&... args);
         // Get a target instance's data member
-        Variable getAttribute(const std::string& attr_name) const;
-        // Invoke a member function
+        Attribute getAttribute(const std::string& attr_name) const;
+        // Get a target instance's data member list
+        std::vector<Attribute> getAttributeList() const;
+        // Get a target instance's member function
+        Method getMethod(const std::string& method_name) const;
+        // Get a target instance's member function list
+        std::vector<Method> getMethodList() const;
+    };
+
+    class Attribute {
+    private:
+        AttrInfo info;
+        std::shared_ptr<Reflectable> instance;  // pointer to instance
+
+    public:
+        Attribute(const Object& obj, const std::string& name) : info((obj.ci.attributes)[name]), instance(obj.instance) {}
+        // Get current attribute name
+        std::string getName() const { return info.attr_name; }
+        // Set a target instance's data member
+        void setValue(Variable var);
+        // Get value
+        Variable getValue() const;
+    };
+
+    class Method {
+    private:
+        MethodInfo info;
+        std::shared_ptr<Reflectable> instance;  // pointer to instance
+
+    private:
+        static std::map<std::string, MethodInfo>& getMethods();
+
+    public:
+        // Nonmember method init
+        Method(const std::string& name) : info(Method::getMethods()[name]), instance(nullptr) {}
+        // Member method init
+        Method(const Object& obj, const std::string& name) : info((obj.ci.methods)[name]), instance(obj.instance) {}
+        // Get current method name
+        std::string getName() const { return info.method_name; }
+        // Invoke function
         template<typename... Args>
-        auto invokeMemberFunc(const std::string& method_name, Args&&... args);
+        auto invokeMethod(Args&&... args);
     };
 
     /* Implementation */
@@ -78,8 +106,8 @@ namespace jrReflection {
     }
 
     template<typename T, typename R, typename... Args>
-    void Registrar::registMemfun(const std::string& method_name, R(T::*method)(Args...)) {
-        ci.methods.emplace(method_name, MemfunInfo(method_name, method));
+    void Registrar::registMethod(const std::string& method_name, R(T::*method)(Args...)) {
+        ci.methods.emplace(method_name, MethodInfo(method_name, method));
     }
 
     template<typename R, typename... Args>
@@ -88,15 +116,9 @@ namespace jrReflection {
     }
 
     template<typename... Args>
-    auto Method::invokeMethod(Args&&... args) {
-        auto fun = std::any_cast<std::function<Variable(Args...)>>(Method::getMethods()[method_name].method);
-        return fun(std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void Object::constructor(Args&&... args) {
+    void Object::construct(Args&&... args) {
         try {
-            auto ctor = std::any_cast<std::function<Reflectable*(Args...)>>(Object::getObjects()[class_name].creator);
+            auto ctor = std::any_cast<std::function<std::shared_ptr<Reflectable>(Args...)>>(ci.creator);
             instance = ctor(std::forward<Args>(args)...);
         } catch (const std::bad_any_cast&) {
             throw std::runtime_error("Constructor is empty!");
@@ -104,9 +126,17 @@ namespace jrReflection {
     }
 
     template<typename... Args>
-    auto Object::invokeMemberFunc(const std::string& method_name, Args&&... args) {
-        auto memfun = std::any_cast<std::function<Variable(Reflectable*, Args...)>>((Object::getObjects()[class_name].methods)[method_name].memfun);
-        return memfun(instance, std::forward<Args>(args)...);
+    auto Method::invokeMethod(Args&&... args) {
+        if(instance) {
+            // Invoke a member function
+            auto memfun = std::any_cast<std::function<Variable(std::shared_ptr<Reflectable>, Args...)>>(info.method);
+            return memfun(instance, std::forward<Args>(args)...);
+        } else {
+            // Invoke a nonmember function
+            auto fun = std::any_cast<std::function<Variable(Args...)>>(info.method);
+            return fun(std::forward<Args>(args)...);
+        }
+
     }
 }
 
