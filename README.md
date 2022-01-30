@@ -160,7 +160,7 @@ ctor_wrapper = [](Args&&... ctorArgs) {
     if(!b) {
         throw std::runtime_error("Reflectable is not base of ChildClass");
     }
-    // 取用向下转型后的对象所持有的成员
+    // 返回向上转型后的对象指针
     return b;
 };
 ```
