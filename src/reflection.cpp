@@ -1,30 +1,37 @@
 #include "reflection.hpp"
 
 namespace jrReflection {
-    static std::map<std::string, ClassInfo> objects;
+    static std::map<std::string, ClassInfo> classes;
     static std::map<std::string, MethodInfo> methods;
 
+    /* Get std::map in header */
+    std::map<std::string, ClassInfo>& Utils::getClasses() { return classes; }
+    std::map<std::string, MethodInfo>& Utils::getMethods() { return methods; }
+
+    /* If reflect a class, the destructor will regist the Classinfo into std::map */
     Registrar::~Registrar() {
         if(!ci.class_name.empty()) {
-            Registrar::getObjects().emplace(ci.class_name, ci);
+            Utils::getClasses().emplace(ci.class_name, ci);
         }
     }
 
-    std::map<std::string, ClassInfo>& Registrar::getObjects() {
-        return objects;
+    /* Class*/
+    Class& Class::forName(const std::string& name) {
+        static Class ret(name);
+        return ret;
     }
 
-    std::map<std::string, MethodInfo>& Registrar::getMethods() {
-        return methods;
+    Class& Class::forName(std::string&& name) {
+        static Class ret(std::move(name));
+        return ret;
     }
 
-    std::map<std::string, ClassInfo>& Object::getObjects() {
-        return objects;
-    }
+    Constructor Class::getConstructor() const { return Constructor(class_name, Utils::getClasses().at(class_name).creator); }
 
-    Attribute Object::getAttribute(const std::string& attr_name) const {
-        return Attribute(*this, attr_name);
-    }
+    /* Object */
+    Object::Object(const std::string& name, std::shared_ptr<Reflectable> instance) : ci(Utils::getClasses()[name]), instance(instance) {}
+
+    Attribute Object::getAttribute(const std::string& attr_name) const { return Attribute(*this, attr_name); }
 
     std::vector<Attribute> Object::getAttributeList() const {
         std::vector<Attribute> attrs;
@@ -34,9 +41,7 @@ namespace jrReflection {
         return attrs;
     }
 
-    Method Object::getMethod(const std::string& method_name) const {
-        return Method(*this, method_name);
-    }
+    Method Object::getMethod(const std::string& method_name) const { return Method(*this, method_name); }
 
     std::vector<Method> Object::getMethodList() const {
         std::vector<Method> methods;
@@ -46,6 +51,7 @@ namespace jrReflection {
         return methods;
     }
 
+    /* Attribute */
     void Attribute::setValue(Variable var) {
         auto set_attr = std::any_cast<std::function<void(std::shared_ptr<Reflectable>, Variable)>>(info.set_attr);
         set_attr(instance, var);
@@ -56,7 +62,6 @@ namespace jrReflection {
         return get_attr(instance);
     }
 
-    std::map<std::string, MethodInfo>& Method::getMethods() {
-        return methods;
-    }
+    /* Method */
+    Method::Method(const std::string& name) : info(Utils::getMethods()[name]), instance(nullptr) {}
 }

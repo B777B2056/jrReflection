@@ -160,14 +160,14 @@ ctor_wrapper = [](Args&&... ctorArgs) {
     if(!b) {
         throw std::runtime_error("Reflectable is not base of ChildClass");
     }
-    // 返回向上转型后的对象指针
+    // 取用向下转型后的对象所持有的成员
     return b;
 };
 ```
 ### 2.3.4 string-ClassInfo键值对
 该键值对定义在reflection.cpp内，对用户透明；用于通过类名称迅速查找对应的ClassInfo对象。  
 ```c++
-static std::map<std::string, ClassInfo> objects;
+static std::map<std::string, ClassInfo> classes;
 ```
 ## 3 反射工作过程
 ### 3.1 非成员函数反射
